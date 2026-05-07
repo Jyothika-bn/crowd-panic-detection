@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crowd Panic Detection Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        /* Navbar */
+        .navbar {
+            background: linear-gradient(90deg, #1a1a2e, #16213e);
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            height: 60px;
+            border-bottom: 1px solid #2a2a4a;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .navbar-brand i { color: #e74c3c; }
+
+        .pulse {
+            width: 8px; height: 8px;
+            background: #27ae60;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            margin-left: 6px;
+        }
+
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+        .nav-tabs {
+            display: flex;
+            align-items: center;
+            gap: 0.2rem;
+            margin-left: 2rem;
+            height: 100%;
+        }
+
+        .nav-tab {
+            padding: 0 1.2rem;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #888;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .nav-tab:hover { color: #fff; }
+        .nav-tab.active { color: #667eea; border-bottom-color: #667eea; }
+
+        .nav-right { margin-left: auto; display: flex; align-items: center; gap: 0.8rem; }
+
+        .live-btn {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: #fff;
+            padding: 0.45rem 1.1rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+
+        .live-btn:hover { opacity: 0.85; }
+
+        /* Content */
+        .content {
+            padding: 1.5rem 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Stats row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: #12121f;
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 1.2rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .stat-icon {
+            width: 44px; height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .stat-icon.red   { background: rgba(231,76,60,0.15);  color: #e74c3c; }
+        .stat-icon.blue  { background: rgba(52,152,219,0.15); color: #3498db; }
+        .stat-icon.green { background: rgba(39,174,96,0.15);  color: #27ae60; }
+        .stat-icon.purple{ background: rgba(142,68,173,0.15); color: #8e44ad; }
+
+        .stat-info .val {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .stat-info .lbl {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 0.3rem;
+        }
+
+        /* Cards */
+        .card {
+            background: #12121f;
+            border: 1px solid #2a2a4a;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #667eea;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Two col layout */
+        .two-col {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Alert items */
+        .alert-item {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-left: 3px solid #e74c3c;
+            border-radius: 0 10px 10px 0;
+            padding: 1rem 1.2rem;
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .alert-item.medium { border-left-color: #f39c12; }
+        .alert-item.low    { border-left-color: #27ae60; }
+
+        .alert-main { flex: 1; }
+
+        .alert-cam {
+            font-weight: 700;
+            color: #fff;
+            font-size: 0.95rem;
+        }
+
+        .alert-meta {
+            color: #666;
+            font-size: 0.78rem;
+            margin-top: 0.2rem;
+        }
+
+        .alert-reason {
+            color: #aaa;
+            font-size: 0.82rem;
+            margin-top: 0.4rem;
+        }
+
+        .alert-score {
+            font-size: 1.4rem;
+            font-weight: 700;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .score-high   { color: #e74c3c; }
+        .score-medium { color: #f39c12; }
+        .score-low    { color: #27ae60; }
+
+        .badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+
+        .badge-high   { background: rgba(231,76,60,0.2);  color: #e74c3c; }
+        .badge-medium { background: rgba(243,156,18,0.2); color: #f39c12; }
+        .badge-low    { background: rgba(39,174,96,0.2);  color: #27ae60; }
+
+        .watch-btn {
+            background: rgba(102,126,234,0.15);
+            border: 1px solid rgba(102,126,234,0.3);
+            color: #667eea;
+            padding: 0.45rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            white-space: nowrap;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .watch-btn:hover { background: rgba(102,126,234,0.3); }
+
+        /* Demo grid */
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.8rem;
+        }
+
+        .demo-card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 0.9rem;
+            text-align: center;
+        }
+
+        .demo-card .icon { font-size: 1.4rem; }
+        .demo-card .num  { font-size: 1.3rem; font-weight: 700; color: #fff; margin-top: 0.2rem; }
+        .demo-card .name { font-size: 0.7rem; color: #666; text-transform: uppercase; }
+
+        /* Chart */
+        .chart-wrap { height: 260px; position: relative; }
+
+        /* Camera grid */
+        .cam-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+
+        .cam-card {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            padding: 1rem;
+        }
+
+        .cam-card h4 { color: #fff; font-size: 0.9rem; margin-bottom: 0.3rem; }
+        .cam-card p  { color: #666; font-size: 0.78rem; margin-bottom: 0.6rem; }
+
+        .cam-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.75rem;
+            color: #27ae60;
+        }
+
+        .cam-status::before {
+            content: '';
+            width: 6px; height: 6px;
+            background: #27ae60;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        /* Export */
+        .export-row { display: flex; gap: 1rem; }
+
+        .btn {
+            padding: 0.6rem 1.3rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover { opacity: 0.85; }
+        .btn-green  { background: #27ae60; color: #fff; }
+        .btn-blue   { background: #2980b9; color: #fff; }
+
+        @media (max-width: 1024px) {
+            .stats-row { grid-template-columns: repeat(2,1fr); }
+            .two-col   { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 600px) {
+            .stats-row { grid-template-columns: 1fr; }
+            .nav-tabs  { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="navbar-brand">
+        <i class="fas fa-shield-alt"></i>
+        Crowd Panic Detection
+        <div class="pulse"></div>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showTab('dashboard', this)">
+            <i class="fas fa-chart-line"></i> Dashboard
+        </button>
+        <button class="nav-tab" onclick="showTab('alerts', this)">
+            <i class="fas fa-bell"></i> Alerts
+        </button>
+        <button class="nav-tab" onclick="showTab('cameras', this)">
+            <i class="fas fa-video"></i> Cameras
+        </button>
+        <button class="nav-tab" onclick="showTab('reports', this)">
+            <i class="fas fa-file-alt"></i> Reports
+        </button>
+    </div>
+
+    <div class="nav-right">
+        <a href="/camera" class="live-btn">
+            <i class="fas fa-circle" style="font-size:0.5rem;"></i> Live Camera
+        </a>
+    </div>
+</nav>
+
+<div class="content">
+
+    <!-- DASHBOARD TAB -->
+    <div id="dashboard" class="tab-content active">
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-icon red"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-info">
+                    <div class="val" id="totalAlerts">0</div>
+                    <div class="lbl">Total Alerts</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon blue"><i class="fas fa-calendar-day"></i></div>
+                <div class="stat-info">
+                    <div class="val" id="alertsToday">0</div>
+                    <div class="lbl">Alerts Today</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon purple"><i class="fas fa-chart-bar"></i></div>
+                <div class="stat-info">
+                    <div class="val" id="avgScore">0.00</div>
+                    <div class="lbl">Avg Panic Score</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon red"><i class="fas fa-fire"></i></div>
+                <div class="stat-info">
+                    <div class="val" id="criticalAlerts">0</div>
+                    <div class="lbl">Critical Alerts</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="two-col">
+            <div class="card">
+                <div class="card-title"><i class="fas fa-chart-line"></i> Panic Score Trend</div>
+                <div class="chart-wrap"><canvas id="panicChart"></canvas></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><i class="fas fa-users"></i> Demographics</div>
+                <div class="demo-grid">
+                    <div class="demo-card">
+                        <div class="icon">👨</div>
+                        <div class="num" id="totalMale">0</div>
+                        <div class="name">Male</div>
+                    </div>
+                    <div class="demo-card">
+                        <div class="icon">👩</div>
+                        <div class="num" id="totalFemale">0</div>
+                        <div class="name">Female</div>
+                    </div>
+                    <div class="demo-card">
+                        <div class="icon">👶</div>
+                        <div class="num" id="totalChildren">0</div>
+                        <div class="name">Children</div>
+                    </div>
+                    <div class="demo-card">
+                        <div class="icon">🧑</div>
+                        <div class="num" id="totalAdults">0</div>
+                        <div class="name">Adults</div>
+                    </div>
+                    <div class="demo-card">
+                        <div class="icon">👴</div>
+                        <div class="num" id="totalElderly">0</div>
+                        <div class="name">Elderly</div>
+                    </div>
+                    <div class="demo-card">
+                        <div class="icon">📊</div>
+                        <div class="num" id="avgAge">0</div>
+                        <div class="name">Avg Age</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title"><i class="fas fa-bell"></i> Recent Alerts</div>
+            <div id="recentAlerts"></div>
+        </div>
+    </div>
+
+    <!-- ALERTS TAB -->
+    <div id="alerts" class="tab-content">
+        <div class="card">
+            <div class="card-title"><i class="fas fa-bell"></i> All Alerts</div>
+            <div id="allAlerts"></div>
+        </div>
+    </div>
+
+    <!-- CAMERAS TAB -->
+    <div id="cameras" class="tab-content">
+        <div class="card">
+            <div class="card-title"><i class="fas fa-video"></i> Camera Status</div>
+            <div class="cam-grid" id="cameraGrid"></div>
+        </div>
+    </div>
+
+    <!-- REPORTS TAB -->
+    <div id="reports" class="tab-content">
+        <div class="card">
+            <div class="card-title"><i class="fas fa-file-alt"></i> Export Reports</div>
+            <p style="color:#888; margin-bottom:1.2rem; font-size:0.9rem;">Download incident reports in various formats</p>
+            <div class="export-row">
+                <button class="btn btn-green" onclick="exportCSV()">
+                    <i class="fas fa-file-csv"></i> Export CSV
+                </button>
+                <button class="btn btn-blue" onclick="alert('PDF export — generates comprehensive incident report')">
+                    <i class="fas fa-file-pdf"></i> Generate PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let panicChart = null;
+
+    function showTab(name, el) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(name).classList.add('active');
+        el.classList.add('active');
+    }
+
+    function levelClass(level) {
+        if (!level) return '';
+        const l = level.toUpperCase();
+        if (l === 'HIGH' || l === 'CRITICAL') return 'high';
+        if (l === 'MEDIUM') return 'medium';
+        return 'low';
+    }
+
+    function alertHTML(alert) {
+        const lc = levelClass(alert.alert_level);
+        const scoreClass = lc === 'high' ? 'score-high' : lc === 'medium' ? 'score-medium' : 'score-low';
+        return `
+        <div class="alert-item ${lc}">
+            <div class="alert-main">
+                <div class="alert-cam">
+                    ${alert.camera_id}
+                    <span class="badge badge-${lc}" style="margin-left:8px;">${alert.alert_level}</span>
+                </div>
+                <div class="alert-meta">
+                    ${new Date(alert.timestamp).toLocaleString()} &nbsp;·&nbsp;
+                    ${alert.people_count || 0} people &nbsp;·&nbsp;
+                    👨 ${alert.male_count||0} &nbsp; 👩 ${alert.female_count||0} &nbsp;
+                    👶 ${alert.children_count||0} &nbsp; 👴 ${alert.elderly_count||0}
+                </div>
+                ${alert.panic_reason ? `<div class="alert-reason"><i class="fas fa-exclamation-circle" style="color:#e74c3c;"></i> ${alert.panic_reason}</div>` : ''}
+            </div>
+            <div class="alert-score ${scoreClass}">${(alert.panic_score * 100).toFixed(0)}%</div>
+            <a class="watch-btn" href="/api/video/${alert.id}" target="_blank">
+                <i class="fas fa-play"></i> Watch
+            </a>
+        </div>`;
+    }
+
+    function loadStats() {
+        fetch('/api/stats').then(r => r.json()).then(d => {
+            document.getElementById('totalAlerts').textContent    = d.total_alerts;
+            document.getElementById('alertsToday').textContent    = d.alerts_today;
+            document.getElementById('avgScore').textContent       = (d.avg_panic_score * 100).toFixed(0) + '%';
+            document.getElementById('criticalAlerts').textContent = d.critical_alerts;
+        });
+
+        fetch('/api/alerts').then(r => r.json()).then(alerts => {
+            let male=0, female=0, children=0, adults=0, elderly=0, ageSum=0, ageCnt=0;
+            alerts.forEach(a => {
+                male     += a.male_count     || 0;
+                female   += a.female_count   || 0;
+                children += a.children_count || 0;
+                adults   += a.adults_count   || 0;
+                elderly  += a.elderly_count  || 0;
+                if (a.avg_age) { ageSum += a.avg_age; ageCnt++; }
+            });
+            document.getElementById('totalMale').textContent     = male;
+            document.getElementById('totalFemale').textContent   = female;
+            document.getElementById('totalChildren').textContent = children;
+            document.getElementById('totalAdults').textContent   = adults;
+            document.getElementById('totalElderly').textContent  = elderly;
+            document.getElementById('avgAge').textContent        = ageCnt ? Math.round(ageSum/ageCnt) : 0;
+
+            document.getElementById('recentAlerts').innerHTML = alerts.slice(0,5).map(alertHTML).join('');
+            document.getElementById('allAlerts').innerHTML    = alerts.map(alertHTML).join('');
+        });
+    }
+
+    function loadChart() {
+        fetch('/api/chart_data').then(r => r.json()).then(d => {
+            const ctx = document.getElementById('panicChart').getContext('2d');
+            if (panicChart) panicChart.destroy();
+            panicChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: d.timestamps,
+                    datasets: [{
+                        label: 'Panic Score',
+                        data: d.panic_scores.map(v => v * 100),
+                        borderColor: '#e74c3c',
+                        backgroundColor: 'rgba(231,76,60,0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#e74c3c',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#888' } } },
+                    scales: {
+                        x: { ticks: { color: '#666' }, grid: { color: '#1e1e35' } },
+                        y: { beginAtZero: true, max: 100,
+                             ticks: { color: '#666', callback: v => v + '%' },
+                             grid: { color: '#1e1e35' } }
+                    }
+                }
+            });
+        });
+    }
+
+    function loadCameras() {
+        fetch('/api/cameras').then(r => r.json()).then(cams => {
+            document.getElementById('cameraGrid').innerHTML = cams.map(c => `
+                <div class="cam-card">
+                    <h4><i class="fas fa-camera" style="color:#667eea;margin-right:6px;"></i>${c.name}</h4>
+                    <p>${c.location || c.id}</p>
+                    <span class="cam-status">Online</span>
+                </div>`).join('');
+        }).catch(() => {
+            document.getElementById('cameraGrid').innerHTML = `
+                <div class="cam-card"><h4>MALL-CAM-01</h4><p>Main Entrance</p><span class="cam-status">Online</span></div>
+                <div class="cam-card"><h4>MALL-CAM-02</h4><p>Food Court</p><span class="cam-status">Online</span></div>
+                <div class="cam-card"><h4>MALL-CAM-03</h4><p>Exit A</p><span class="cam-status">Online</span></div>
+                <div class="cam-card"><h4>MALL-CAM-04</h4><p>Parking Level 1</p><span class="cam-status">Online</span></div>
+                <div class="cam-card"><h4>MALL-CAM-05</h4><p>Escalators</p><span class="cam-status">Online</span></div>`;
+        });
+    }
+
+    function exportCSV() { window.location.href = '/api/export/csv'; }
+
+    loadStats();
+    loadChart();
+    loadCameras();
+    setInterval(() => { loadStats(); loadChart(); }, 5000);
+</script>
+</body>
+</html>

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Camera - Crowd Panic Detection</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f0f1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: linear-gradient(90deg, #1a1a2e, #16213e);
+            padding: 0 2rem;
+            display: flex;
+            align-items: center;
+            height: 60px;
+            border-bottom: 1px solid #2a2a4a;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .navbar-brand i { color: #e74c3c; }
+
+        .back-btn {
+            margin-left: auto;
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.15);
+            padding: 0.45rem 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            height: calc(100vh - 60px);
+        }
+
+        /* Video side */
+        .video-panel {
+            background: #000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .video-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #videoFeed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        #overlayCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        #canvas { display: none; }
+
+        .controls {
+            background: #111;
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            gap: 0.8rem;
+            border-top: 1px solid #222;
+        }
+
+        .btn {
+            padding: 0.5rem 1.2rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.88rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover { opacity: 0.85; }
+        .btn-start { background: #27ae60; color: #fff; }
+        .btn-stop  { background: #e74c3c; color: #fff; }
+        .btn-back  { background: #2a2a4a; color: #aaa; text-decoration: none; }
+
+        /* Stats side */
+        .stats-panel {
+            background: #12121f;
+            border-left: 1px solid #2a2a4a;
+            overflow-y: auto;
+        }
+
+        .section {
+            padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid #1e1e35;
+        }
+
+        .section-title {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #667eea;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .panic-indicator {
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0;
+        }
+
+        .panic-normal   { background: rgba(39,174,96,0.15);  color: #27ae60; border: 1px solid rgba(39,174,96,0.3); }
+        .panic-elevated { background: rgba(243,156,18,0.15); color: #f39c12; border: 1px solid rgba(243,156,18,0.3); }
+        .panic-high     { background: rgba(231,76,60,0.15);  color: #e74c3c; border: 1px solid rgba(231,76,60,0.3); animation: blink 1s infinite; }
+
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #1e1e35;
+            font-size: 0.88rem;
+        }
+
+        .stat-row:last-child { border-bottom: none; }
+        .stat-row .lbl { color: #666; }
+        .stat-row .val { color: #fff; font-weight: 600; }
+
+        .big-num {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #fff;
+            text-align: center;
+            padding: 0.5rem 0;
+        }
+
+        .cam-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.82rem;
+        }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #555;
+        }
+
+        .dot.running { background: #27ae60; animation: blink 2s infinite; }
+
+        @media (max-width: 768px) {
+            .main { grid-template-columns: 1fr; }
+            .stats-panel { border-left: none; border-top: 1px solid #2a2a4a; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="navbar-brand">
+        <i class="fas fa-shield-alt"></i>
+        Live Camera Detection
+    </div>
+    <a href="/" class="back-btn">
+        <i class="fas fa-arrow-left"></i> Dashboard
+    </a>
+</nav>
+
+<div class="main">
+    <!-- Video -->
+    <div class="video-panel">
+        <div class="video-wrapper">
+            <video id="videoFeed" autoplay playsinline></video>
+            <canvas id="overlayCanvas"></canvas>
+            <canvas id="canvas"></canvas>
+        </div>
+        <div class="controls">
+            <button class="btn btn-start" onclick="startCamera()">
+                <i class="fas fa-play"></i> Start Camera
+            </button>
+            <button class="btn btn-stop" onclick="stopCamera()">
+                <i class="fas fa-stop"></i> Stop Camera
+            </button>
+            <a href="/" class="btn btn-back">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-panel">
+        <div class="section">
+            <div class="section-title"><i class="fas fa-tachometer-alt"></i> Panic Level</div>
+            <div class="panic-indicator panic-normal" id="panicIndicator">✓ Normal</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-users"></i> People Detected</div>
+            <div class="big-num" id="peopleCount">0</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-chart-bar"></i> Demographics</div>
+            <div class="stat-row"><span class="lbl">👨 Male</span>   <span class="val" id="maleCount">0</span></div>
+            <div class="stat-row"><span class="lbl">👩 Female</span> <span class="val" id="femaleCount">0</span></div>
+            <div class="stat-row"><span class="lbl">👶 Children</span><span class="val" id="childrenCount">0</span></div>
+            <div class="stat-row"><span class="lbl">👴 Elderly</span><span class="val" id="elderlyCount">0</span></div>
+            <div class="stat-row"><span class="lbl">📊 Avg Age</span><span class="val" id="avgAge">0</span></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-exclamation-triangle"></i> Panic Emotions</div>
+            <div class="big-num" id="panicEmotions" style="font-size:1.5rem;">0/0</div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-circle"></i> Camera</div>
+            <div class="cam-status">
+                <div class="dot" id="statusDot"></div>
+                <span id="cameraStatus">Stopped</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title"><i class="fas fa-info-circle"></i> Legend</div>
+            <div class="stat-row">
+                <span style="color:#00FF00;">■</span>
+                <span class="lbl" style="flex:1; margin-left:8px;">Normal person</span>
+            </div>
+            <div class="stat-row">
+                <span style="color:#FF0000;">■</span>
+                <span class="lbl" style="flex:1; margin-left:8px;">Panic detected</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const video   = document.getElementById('videoFeed');
+    const canvas  = document.getElementById('canvas');
+    const overlay = document.getElementById('overlayCanvas');
+
+    let stream = null;
+    let isRunning = false;
+    let detectionInterval = null;
+    let currentDetections = [];
+
+    function resizeOverlay() {
+        const rect = video.getBoundingClientRect();
+        overlay.width  = rect.width  || video.videoWidth  || 640;
+        overlay.height = rect.height || video.videoHeight || 480;
+    }
+
+    video.addEventListener('loadedmetadata', resizeOverlay);
+    window.addEventListener('resize', resizeOverlay);
+
+    async function startCamera() {
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 } }
+            });
+            video.srcObject = stream;
+            isRunning = true;
+
+            document.getElementById('cameraStatus').textContent = 'Running';
+            document.getElementById('statusDot').className = 'dot running';
+
+            video.onloadedmetadata = () => {
+                resizeOverlay();
+                setTimeout(() => {
+                    performDetection();
+                    detectionInterval = setInterval(performDetection, 2000);
+                    startDrawLoop();
+                }, 500);
+            };
+
+            // Also trigger if metadata already loaded
+            video.onplaying = () => {
+                if (!detectionInterval) {
+                    resizeOverlay();
+                    performDetection();
+                    detectionInterval = setInterval(performDetection, 2000);
+                    startDrawLoop();
+                }
+            };
+        } catch (e) {
+            alert('Camera access denied: ' + e.message);
+        }
+    }
+
+    function stopCamera() {
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            video.srcObject = null;
+        }
+        isRunning = false;
+        drawLoopRunning = false;
+        clearInterval(detectionInterval);
+        currentDetections = [];
+        overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+        document.getElementById('cameraStatus').textContent = 'Stopped';
+        document.getElementById('statusDot').className = 'dot';
+        resetStats();
+    }
+
+    function resetStats() {
+        ['peopleCount','maleCount','femaleCount','childrenCount','elderlyCount','avgAge'].forEach(id => {
+            document.getElementById(id).textContent = '0';
+        });
+        document.getElementById('panicEmotions').textContent = '0/0';
+        document.getElementById('panicIndicator').className = 'panic-indicator panic-normal';
+        document.getElementById('panicIndicator').textContent = '✓ Normal';
+    }
+
+    async function performDetection() {
+        if (!isRunning || !video.videoWidth) return;
+
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const frameData = canvas.toDataURL('image/jpeg', 0.8);
+
+        try {
+            const res = await fetch('/api/process_frame', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ frame: frameData })
+            });
+
+            if (res.ok) {
+                const result = await res.json();
+                if (result.detections && result.detections.length > 0) {
+                    currentDetections = result.detections;
+                    updateStats(result.stats);
+                } else {
+                    currentDetections = [];
+                    updateStats(result.stats || { total_people:0, male_count:0, female_count:0, children:0, elderly:0, avg_age:0, panic_emotions:0 });
+                }
+            }
+        } catch (e) {
+            console.error('Detection error:', e);
+        }
+    }
+
+    let drawLoopRunning = false;
+    function startDrawLoop() {
+        if (drawLoopRunning) return;
+        drawLoopRunning = true;
+        function loop() {
+            if (!isRunning) { drawLoopRunning = false; return; }
+            resizeOverlay();
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+
+            const nW = video.videoWidth  || 1280;
+            const nH = video.videoHeight || 720;
+            const sX = overlay.width  / nW;
+            const sY = overlay.height / nH;
+
+            const panicEmotions = ['fear', 'angry', 'sad', 'disgust'];
+
+            currentDetections.forEach(det => {
+                const { x, y, width, height, gender, age, emotion } = det;
+                const isPanic = panicEmotions.includes((emotion||'').toLowerCase());
+                const color   = isPanic ? '#FF0000' : '#00FF00';
+
+                const dx = x * sX, dy = y * sY, dw = width * sX, dh = height * sY;
+
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(dx, dy, dw, dh);
+
+                const label = isPanic ? `⚠ ${emotion} | ${age}y` : `${gender}, ${age}y`;
+                ctx.font = 'bold 14px Arial';
+                const tw = ctx.measureText(label).width;
+                const lx = dx + (dw - tw) / 2;
+                const ly = Math.max(dy - 8, 18);
+
+                ctx.fillStyle = color;
+                ctx.globalAlpha = 0.8;
+                ctx.fillRect(lx - 4, ly - 16, tw + 8, 20);
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#fff';
+                ctx.fillText(label, lx, ly - 2);
+            });
+
+            requestAnimationFrame(loop);
+        }
+        requestAnimationFrame(loop);
+    }
+
+    function drawLoop() {} // kept for compatibility
+
+    function updateStats(s) {
+        document.getElementById('peopleCount').textContent   = s.total_people;
+        document.getElementById('maleCount').textContent     = s.male_count;
+        document.getElementById('femaleCount').textContent   = s.female_count;
+        document.getElementById('childrenCount').textContent = s.children;
+        document.getElementById('elderlyCount').textContent  = s.elderly;
+        document.getElementById('avgAge').textContent        = s.avg_age;
+        document.getElementById('panicEmotions').textContent = `${s.panic_emotions}/${s.total_people}`;
+
+        const ratio = s.total_people > 0 ? s.panic_emotions / s.total_people : 0;
+        const ind = document.getElementById('panicIndicator');
+        if (ratio >= 0.6) {
+            ind.className = 'panic-indicator panic-high';
+            ind.innerHTML = '<i class="fas fa-exclamation-triangle"></i> PANIC DETECTED!';
+        } else if (ratio >= 0.3) {
+            ind.className = 'panic-indicator panic-elevated';
+            ind.innerHTML = '<i class="fas fa-exclamation-circle"></i> Elevated';
+        } else {
+            ind.className = 'panic-indicator panic-normal';
+            ind.textContent = '✓ Normal';
+        }
+    }
+</script>
+</body>
+</html>
